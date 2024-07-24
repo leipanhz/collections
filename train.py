@@ -3,13 +3,24 @@ from transformers import LlamaForCausalLM, LlamaTokenizer, Trainer, TrainingArgu
 from datasets import load_from_disk
 
 import os
-from transformers import LlamaTokenizer, LlamaForCausalLM
 
 data_dir_path="/mnt/fs1/lroc/llama2/data/wikitext-2/"
 output_dir_path="/mnt/fs1/lroc/llama2/output"
 
 model_path="/mnt/fs1/lroc/llama2/hf_model"
 tokenizer_path="/mnt/fs1/lroc/llama2/hf_model"
+
+# path validation
+if not os.path.exists(model_path):
+    raise ValueError(f"Model path does not exist: {model_path}")
+if not os.path.exists(tokenizer_path):
+    raise ValueError(f"Tokenizer path does not exist: {tokenizer_path}")
+if not os.path.exists(data_dir_path):
+    raise ValueError(f"Data directory does not exist: {data_dir_path}")
+
+print(f"Model path contents: {os.listdir(model_path)}")
+print(f"Tokenizer path contents: {os.listdir(tokenizer_path)}")
+print(f"Data directory contents: {os.listdir(data_dir_path)}")
 
 parser = argparse.ArgumentParser(description='LLaMa2 Training Script')
 parser.add_argument('--data_dir', type=str, default=data_dir_path, help='Directory containing the training data')
