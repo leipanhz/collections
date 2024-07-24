@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+        name: pv-lroc
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteMany
+  csi:
+    driver: spectrumscale.csi.ibm.com
+    volumeHandle: "11800544993909288814:AF80F10A:652EF97A:path=/ibm/gpfs1/fs1/lroc"

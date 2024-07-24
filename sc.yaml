@@ -1,0 +1,11 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: sc-lroc
+provisioner: spectrumscale.csi.ibm.com
+parameters:
+    volBackendFs: "fs1" # Filesystem fs1 must be defined on the remote Spectrum Scale cluster
+    volDirBasePath: "lroc" # This path must exist on the remote Spectrum Scale cluster under fs1 filesystem
+reclaimPolicy: Retain # Important
+volumeBindingMode: Immediate # Important
+AllowVolumeExpansion: "true"
