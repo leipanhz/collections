@@ -10,6 +10,9 @@ output_dir_path="/mnt/fs1/lroc/llama2/output"
 model_path="/mnt/fs1/lroc/llama2/hf_model"
 tokenizer_path="/mnt/fs1/lroc/llama2/hf_model"
 
+# Read TRANSFORMERS_CACHE from environment variable
+transformers_cache = os.environ.get('TRANSFORMERS_CACHE', '/tmp/hf_cache')
+
 # path validation
 if not os.path.exists(model_path):
     raise ValueError(f"Model path does not exist: {model_path}")

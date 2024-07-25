@@ -2,10 +2,10 @@ namespace: teammlb       # namespace to deploy to (required)
 jobName: ptgen-llm               # name of the generated AppWrapper and PyTorchJob objects (required)
 queueName: default-queue      # local queue to submit to (default: default-queue)
 
-numPods: 1                    # total pod count including master and worker pods (default: 1)
+numPods: 2                    # total pod count including master and worker pods (default: 1)
 numCpusPerPod: 2           # requested number of cpus per pod (default: 1)
 numGpusPerPod: 1              # requested number of gpus per pod (default: 0)
-totalMemoryPerPod: 30Gi        # requested amount of memory per pod (default: 1Gi)
+totalMemoryPerPod: 48Gi        # requested amount of memory per pod (default: 1Gi)
 
 priority: default-priority    # default-priority (default), low-priority, or high-priority
 
@@ -13,9 +13,6 @@ volumes:
 - name: llama2
   claimName: pvc-lroc
   mountPath: /mnt/fs1/lroc/
-# - name: arbitrary-name-1
-#   claimName: name-matching-another-actual-PersistentVolumeClaim
-#   mountPath: /path/to/where/you/want/to/find/your/data
 
 # initContainers:
 # - name: install-git
@@ -29,10 +26,15 @@ containerImage: ghcr.io/foundation-model-stack/base:pytorch-latest-nightly-20230
 # setup commands to run in each pod (optional)
 setupCommands:
 # - git clone https://github.com/leipanhz/collections
-- pip install --upgrade transformers
 - pip install --upgrade transformers sentencepiece datasets
+- pip install accelerate -U
 - git clone https://github.com/leipanhz/collections.git
 - cd collections
+- if [ -d /mnt/fs1/lroc ]; then echo 'PV Exists'; else echo 'PV Not found'; fi
+- if [ -d /mnt/fs1/lroc/llama2/hf_model ]; then echo 'hf_model dir Exists'; else echo 'hf_model Not found'; fi
+- ls /mnt/fs1/lroc/llama2/hf_model
+- export HF_HOME='/tmp/hf_cache'
+- export TRANSFORMERS_CACHE='/tmp/hf_cache'
 
 # main program to invoke via torchrun (optional)
 mainProgram: train.py
