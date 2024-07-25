@@ -30,10 +30,12 @@ parser.add_argument('--data_dir', type=str, default=data_dir_path, help='Directo
 parser.add_argument('--output_dir', type=str, default=output_dir_path, help='Directory to save output files')
 args = parser.parse_args()
 
-# # # Load the tokenizer and model
+# Load the tokenizer and model
 tokenizer = LlamaTokenizer.from_pretrained(tokenizer_path)
 model = LlamaForCausalLM.from_pretrained(model_path)
 
+# Enable gradient checkpointing
+model.gradient_checkpointing_enable()
 
 # Set padding token
 tokenizer.pad_token = tokenizer.eos_token
@@ -54,10 +56,12 @@ tokenized_datasets = dataset.map(tokenize_function, batched=True, remove_columns
 # Define training arguments
 training_args = TrainingArguments(
     output_dir=args.output_dir,
-    per_device_train_batch_size=2,
+    per_device_train_batch_size=1, # reduce batch size from 2
     num_train_epochs=1,
     logging_dir="./logs",
     logging_steps=10,
+    fp16=True,  # Use mixed precision training
+    gradient_accumulation_steps=4,  # Accumulate gradients over multiple
 )
 
 # Initialize the Trainer
