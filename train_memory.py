@@ -4,7 +4,7 @@ from datasets import load_from_disk
 
 import os
 # import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments
+from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, BitsAndBytesConfig
 from datasets import load_dataset
 # from peft import get_peft_model, LoraConfig, TaskType, prepare_model_for_int8_training
 from peft import get_peft_model, LoraConfig, TaskType
@@ -85,14 +85,18 @@ args = parser.parse_args()
 # Load the tokenizer
 tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False, local_files_only=True, cache_dir=transformers_cache)
 
-# Load the model in 8-bit precision
+# Define BitsAndBytesConfig for 8-bit quantization
+quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+
+# Load the model with quantization config
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
-    load_in_8bit=True,
+    quantization_config=quantization_config,
     device_map="auto",
     local_files_only=True,
     cache_dir=transformers_cache
 )
+
 
 # # Prepare the model for int8 training
 # model = prepare_model_for_int8_training(model)
