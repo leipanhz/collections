@@ -1,162 +1,89 @@
-import argparse
-# from transformers import LlamaForCausalLM, LlamaTokenizer, Trainer, TrainingArguments
-from datasets import load_from_disk
-
-import os
-# import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, BitsAndBytesConfig
+import torch
+from transformers import LlamaForCausalLM, LlamaTokenizer, TrainingArguments, Trainer
 from datasets import load_dataset
-# from peft import get_peft_model, LoraConfig, TaskType, prepare_model_for_int8_training
-from peft import get_peft_model, LoraConfig, TaskType
+from peft import LoraConfig, get_peft_model
+import os
+from transformers import BitsAndBytesConfig
 
 
+print("CUDA available:", torch.cuda.is_available())
+print("CUDA version:", torch.version.cuda if torch.cuda.is_available() else "Not available")
+for i in range(torch.cuda.device_count()):
+    print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
 
-data_dir_path="/mnt/fs1/lroc/llama2/data/wikitext-2/"
-output_dir_path="/mnt/fs1/lroc/llama2/output"
-
+# Load the model and tokenizer
 model_path="/mnt/fs1/lroc/llama2/hf_model"
-tokenizer_path="/mnt/fs1/lroc/llama2/hf_model"
+# data_dir_path = "/mnt/fs1/lroc/llama2/data/wikitext-2/"
+data_dir_path = "/mnt/fs1/lroc/llama2/data/"
 
-# Read TRANSFORMERS_CACHE from environment variable
-transformers_cache = os.environ.get('TRANSFORMERS_CACHE', '/tmp/hf_cache')
-
-# path validation
-if not os.path.exists(model_path):
-    raise ValueError(f"Model path does not exist: {model_path}")
-if not os.path.exists(tokenizer_path):
-    raise ValueError(f"Tokenizer path does not exist: {tokenizer_path}")
-if not os.path.exists(data_dir_path):
-    raise ValueError(f"Data directory does not exist: {data_dir_path}")
-
-print(f"Model path contents: {os.listdir(model_path)}")
-print(f"Tokenizer path contents: {os.listdir(tokenizer_path)}")
-print(f"Data directory contents: {os.listdir(data_dir_path)}")
-
-parser = argparse.ArgumentParser(description='LLaMa2 Training Script')
-parser.add_argument('--data_dir', type=str, default=data_dir_path, help='Directory containing the training data')
-parser.add_argument('--output_dir', type=str, default=output_dir_path, help='Directory to save output files')
-args = parser.parse_args()
-
-# # Load the tokenizer and model
-# tokenizer = LlamaTokenizer.from_pretrained(tokenizer_path)
-# model = LlamaForCausalLM.from_pretrained(model_path)
-
-# # Enable gradient checkpointing
-# model.gradient_checkpointing_enable()
-
-# # Set padding token
-# tokenizer.pad_token = tokenizer.eos_token
-# model.config.pad_token_id = tokenizer.pad_token_id
-
-# # Load the dataset from the local disk
-# dataset_path = args.data_dir
-# print(f"Loading dataset from {dataset_path}...")
-# dataset = load_from_disk(dataset_path)
-# print("Dataset loaded successfully.")
-
-# # Tokenize the dataset
-# def tokenize_function(examples):
-#     return tokenizer(examples['text'], return_tensors='pt', truncation=True, padding='max_length', max_length=512)
-
-# tokenized_datasets = dataset.map(tokenize_function, batched=True, remove_columns=['text'])
-
-# # Define training arguments
-# training_args = TrainingArguments(
-#     output_dir=args.output_dir,
-#     per_device_train_batch_size=1, # reduce batch size from 2
-#     num_train_epochs=1,
-#     logging_dir="./logs",
-#     logging_steps=10,
-#     fp16=True,  # Use mixed precision training
-#     gradient_accumulation_steps=4,  # Accumulate gradients over multiple
+tokenizer = LlamaTokenizer.from_pretrained(model_path)
+# # Configure quantization
+# bnb_config = BitsAndBytesConfig(
+#     load_in_4bit=True,
+#     bnb_4bit_use_double_quant=True,
+#     bnb_4bit_quant_type="nf4",
+#     bnb_4bit_compute_dtype=torch.bfloat16
 # )
 
-# # Initialize the Trainer
-# trainer = Trainer(
-#     model=model,
-#     args=training_args,
-#     train_dataset=tokenized_datasets,
+# # Load the model with quantization
+# model = LlamaForCausalLM.from_pretrained(
+#     model_path,
+#     quantization_config=bnb_config,
+#     device_map="auto",
 # )
 
-# # Train the model
-# trainer.train() 
+model = LlamaForCausalLM.from_pretrained(model_path)
 
-
-# Load the tokenizer
-tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False, local_files_only=True, cache_dir=transformers_cache)
-
-# Define BitsAndBytesConfig for 8-bit quantization
-quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-
-# Load the model with quantization config
-model = AutoModelForCausalLM.from_pretrained(
-    model_path,
-    quantization_config=quantization_config,
-    device_map="auto",
-    local_files_only=True,
-    cache_dir=transformers_cache
-)
-
-
-# # Prepare the model for int8 training
-# model = prepare_model_for_int8_training(model)
-
-# Define LoRA Config
+# Configure LoRA
 lora_config = LoraConfig(
-    r=16,
+    r=8,
     lora_alpha=32,
     target_modules=["q_proj", "v_proj"],
     lora_dropout=0.05,
     bias="none",
-    task_type=TaskType.CAUSAL_LM
+    task_type="CAUSAL_LM"
 )
-
-# Get the PEFT model
 model = get_peft_model(model, lora_config)
 
-# Set padding token
-tokenizer.pad_token = tokenizer.eos_token
-model.config.pad_token_id = tokenizer.pad_token_id
+# Load local dataset
+dataset = load_dataset("text", data_files={"train": os.path.join(data_dir_path, "train.txt")}, split="train[:10]")
 
-# Load the dataset from the local disk
-dataset_path = args.data_dir
-print(f"Loading dataset from {dataset_path}...")
-dataset = load_from_disk(dataset_path)
-print("Dataset loaded successfully.")
-
-# Set a temporary directory for the datasets library
-os.environ['TMPDIR'] = '/tmp'
-
-# Tokenize the dataset
+# Tokenize function
 def tokenize_function(examples):
-    return tokenizer(examples['text'], return_tensors='pt', truncation=True, padding='max_length', max_length=512)
+    return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
 
-tokenized_datasets = dataset['train'].map(tokenize_function, batched=True, remove_columns=['text'])
+# Tokenize the dataset in batches to save memory
+tokenized_dataset = dataset.map(
+    tokenize_function,
+    batched=True,
+    batch_size=1,  # Process 1 example at a time to minimize memory usage
+    num_proc=1,     # Use only one process to minimize memory usage
+    remove_columns=dataset.column_names
+)
 
-# Define training arguments
+# Set up training arguments
 training_args = TrainingArguments(
-    output_dir="/output",
+    output_dir="./results",
+    num_train_epochs=1,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=4,
-    num_train_epochs=1,
-    logging_dir="./logs",
-    logging_steps=10,
+    learning_rate=2e-5,
+    weight_decay=0.01,
     fp16=True,
-    optim="adamw_torch",
-    learning_rate=2e-4,
-    warmup_ratio=0.05,
-    dataloader_num_workers=2,
+    optim="paged_adamw_8bit",
+    logging_steps=10,
+    save_strategy="no",
+    evaluation_strategy="no",
+    dataloader_num_workers=0,  # Disable multi-process data loading
+    remove_unused_columns=False,  # Avoid unnecessary memory operations
 )
 
 # Initialize the Trainer
 trainer = Trainer(
     model=model,
     args=training_args,
-    train_dataset=tokenized_datasets,
+    train_dataset=tokenized_dataset,
 )
 
-# Train the model
+# Start training
 trainer.train()
-
-# Save the final model
-trainer.save_model("/output/final_model")
