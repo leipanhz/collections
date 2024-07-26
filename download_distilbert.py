@@ -28,13 +28,21 @@ def download_model_and_dataset(save_model_dir, save_dataset_dir):
 
     # Step 2: Download IMDb dataset
     print("Downloading IMDb dataset...")
-    dataset = load_dataset('imdb')
+    dataset = load_dataset('imdb', ignore_verifications=True)
     
-    # Save the dataset
+    # Save only the 'train' and 'test' splits
     os.makedirs(dataset_dir, exist_ok=True)
-    dataset.save_to_disk(dataset_dir)
+    for split in ['train', 'test']:
+        if split in dataset:
+            split_dir = os.path.join(dataset_dir, split)
+            dataset[split].save_to_disk(split_dir)
+            print(f"Saved {split} split to {split_dir}")
+        else:
+            print(f"Warning: {split} split not found in the dataset")
 
     print(f"Dataset downloaded and saved to {dataset_dir}")
+
+    # Step 3: done
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Download DistilBERT model and IMDb dataset to a specified directory.')
