@@ -3,17 +3,32 @@ import argparse
 from transformers import DistilBertTokenizer, DistilBertForSequenceClassification, Trainer, TrainingArguments
 from datasets import load_from_disk
 import torch
+import datetime
+
+def get_time_milis(t):
+    return int(t.total_seconds() * 1000) # milliseconds
+
+def start_timer():
+    return datetime.datetime.now()
 
 def load_model_and_dataset(model_dir, dataset_dir):
     # model_dir = os.path.join(save_model_dir, 'distilbert')
     # dataset_dir = os.path.join(save_data_dir, 'imdb')
 
     # Load tokenizer and model from local disk
+    begin = start_timer()
+    print(f'time now: {begin}')
     tokenizer = DistilBertTokenizer.from_pretrained(model_dir)
     model = DistilBertForSequenceClassification.from_pretrained(model_dir, num_labels=2)  # 2 labels for sentiment analysis
+    end = start_timer()
+    print(f'time now: {end}, time diff: {end - begin}, totoal seconds: {(end - begin).total_seconds()}')
+    print(f"************ Time to load tokenizer and models: {get_time_milis(end - begin)} miliseconds. ")
 
     # Load dataset from local disk
+    begin = start_timer()
     dataset = load_from_disk(dataset_dir)
+    end = start_timer()
+    print(f"************ Time to load dataset from disks: {get_time_milis(end - begin)} miliseconds. ")
 
     return tokenizer, model, dataset
 
@@ -30,13 +45,17 @@ def main(args):
     tokenizer, model, dataset = load_model_and_dataset(args.model_dir, args.data_dir)
 
     # Tokenize the dataset
+    begin = start_timer()
     tokenized_datasets = dataset.map(lambda examples: tokenize_function(examples, tokenizer), batched=True)
 
     # Prepare the dataset for training
     train_dataset = tokenized_datasets['train'].shuffle(seed=42).select(range(args.train_samples))
     eval_dataset = tokenized_datasets['test'].shuffle(seed=42).select(range(args.eval_samples))
+    end = start_timer()
+    print(f"************ Time to prepare dataset for training: {get_time_milis(end - begin)} miliseconds. ")
 
     # Define the training arguments
+    begin = start_timer()
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         evaluation_strategy="epoch",
@@ -62,14 +81,22 @@ def main(args):
 
     # Train the model
     trainer.train()
+    end = start_timer() 
+    print(f"************ Time to train the model: {get_time_milis(end - begin)} miliseconds. ")
 
     # Evaluate the model
+    begin = start_timer()
     eval_results = trainer.evaluate()
+    end = start_timer() 
+    print(f"************ Time to evaluate the model: {get_time_milis(end - begin)} miliseconds. ")
     print(f"Evaluation results: {eval_results}")
 
     # Save the fine-tuned model
+    begin = start_timer()
     model.save_pretrained(os.path.join(args.output_dir, "final_model"))
     tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
+    end = start_timer() 
+    print(f"************ Time to save the model: {get_time_milis(end - begin)} miliseconds. ")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train DistilBERT model with IMDb dataset from local disk.')
