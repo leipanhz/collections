@@ -1,7 +1,7 @@
 import os
 import argparse
 from transformers import DistilBertTokenizer, DistilBertForSequenceClassification, Trainer, TrainingArguments
-from datasets import load_dataset, Features, Value, ClassLabel
+from datasets import load_dataset, Features, Value, ClassLabel, load_from_disk
 import torch
 import time
 
@@ -45,26 +45,9 @@ def load_model(model_dir):
 @timing_tracing_wrapper
 def load_dataset_for_distilbert(dataset_paths):
     # https://huggingface.co/docs/datasets/v1.12.0/package_reference/loading_methods.html
-    # dataset = load_from_disk(dataset_dir)
-
-    features = Features({
-    'overall': Value('int32'),
-    'vote': Value('string'),
-    'verified': Value('bool'),
-    'reviewTime': Value('string'),
-    'reviewerID': Value('string'),
-    'asin': Value('string'),
-    # 'style': {
-    #     'Format:': Value('string')
-    # },
-    'reviewerName': Value('string'),
-    'reviewText': Value('string'),
-    'summary': Value('string'),
-    'unixReviewTime': Value('int32'),
-    })
-
+    dataset = load_from_disk(dataset_paths)
     # dataset = load_dataset('json', data_files={'train': 'path/to/train.json', 'test': 'path/to/test.json'})
-    dataset = load_dataset('json', data_files=dataset_paths, split='train', features=features)
+    # dataset = load_dataset('json', data_files=dataset_paths, split='train')
     return [dataset]
 
 @timing_tracing_wrapper
@@ -120,13 +103,21 @@ def save_model(args, model, tokenizer):
     tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
 
 def main(args):
+#     [tokenizer, model] = load_model(args.model_dir, separator="load_model")
+#     [dataset] = load_dataset_for_distilbert(args.data_dir, separator="load_dataset")
+#     [train_dataset, eval_dataset] = tokenize_and_prepare_dataset(dataset,tokenizer, separator='tokenize_dataset')
+#     [training_args] = train_arguments(args, separator='training_arguments')
+#     [trainer] = train(model, training_args, train_dataset, eval_dataset, 'start_training')
+#     [eval_trainer] = eval_model(trainer, separator="eval_model")
+#     save_model(separator='save_model_tokenizer')
+
     [tokenizer, model] = load_model(args.model_dir, separator="load_model")
     [dataset] = load_dataset_for_distilbert(args.data_dir, separator="load_dataset")
-    [train_dataset, eval_dataset] = tokenize_and_prepare_dataset(dataset,tokenizer, separator='tokenize_dataset')
+    # [train_dataset, eval_dataset] = tokenize_and_prepare_dataset(dataset,tokenizer, separator='tokenize_dataset')
     [training_args] = train_arguments(args, separator='training_arguments')
-    [trainer] = train(model, training_args, train_dataset, eval_dataset, 'start_training')
-    [eval_trainer] = eval_model(trainer, separator="eval_model")
-    save_model(separator='save_model_tokenizer')
+    [trainer] = train(model, training_args, dataset, dataset, 'start_training')
+    # [eval_trainer] = eval_model(trainer, separator="eval_model")
+    # save_model(separator='save_model_tokenizer')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train DistilBERT model with IMDb dataset from local disk.')
