@@ -1,75 +1,85 @@
 import os
 import argparse
 from transformers import DistilBertTokenizer, DistilBertForSequenceClassification, Trainer, TrainingArguments
-from datasets import load_from_disk
+from datasets import load_dataset, Features, Value, ClassLabel
 import torch
-import datetime
+import time
 
-def get_time_milis(t):
-    return int(t.total_seconds() * 1000) # milliseconds
-
-def start_timer():
-    return datetime.datetime.now()
-
-def load_model_and_dataset(model_dir, dataset_dir):
-    # model_dir = os.path.join(save_model_dir, 'distilbert')
-    # dataset_dir = os.path.join(save_data_dir, 'imdb')
-
-    # Load tokenizer and model from local disk
-    separator='load_model'
-    print(f'======== {separator} =======')
-    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
-    begin = start_timer()
-    tokenizer = DistilBertTokenizer.from_pretrained(model_dir)
-    model = DistilBertForSequenceClassification.from_pretrained(model_dir, num_labels=2)  # 2 labels for sentiment analysis
-    end = start_timer()
-    print(f"************ Time to load tokenizer and models: {get_time_milis(end - begin)} miliseconds. ")
-    os.path.isfile('/mnt/fs1/lroc/load_model_end.txt')
-
-    # Load dataset from local disk
-    separator='load_dataset'
-    print(f'======== {separator} =======')
-    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
-    begin = start_timer()
-    # https://huggingface.co/docs/datasets/v1.12.0/package_reference/loading_methods.html
-    dataset = load_from_disk(dataset_dir)
-    end = start_timer()
-    print(f"************ Time to load dataset from disks: {get_time_milis(end - begin)} miliseconds. ")
-    os.path.isfile('/mnt/fs1/lroc/load_dataset_end.txt')
-
-    return tokenizer, model, dataset
-
-def tokenize_function(examples, tokenizer):
-    return tokenizer(examples['text'], padding='max_length', truncation=True, max_length=512)
+def tokenize_function(data, tokenizer, textfield):
+    return tokenizer(data[textfield], padding='max_length', truncation=True, max_length=512)
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = torch.argmax(torch.tensor(logits), dim=-1)
     return {"accuracy": (predictions == torch.tensor(labels)).float().mean().item()}
 
-def main(args):
-    # Load model and dataset
-    tokenizer, model, dataset = load_model_and_dataset(args.model_dir, args.data_dir)
+def timing_tracing_wrapper(func):
+    def wrapper(*args, **kwargs):
+        # simulate filesystem activity tracing
+        separator = kwargs.get("separator")
+        print(f'================ {separator} ==============')
+        os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
 
+        # run module and get execution time
+        start_time = time.time()
+        result = func(*args)
+        end_time = time.time()
+        running_time = end_time - start_time
+        print(f"Running time for {func.__name__}: {running_time:.4f} seconds")
+
+        return result
+
+    return wrapper
+
+@timing_tracing_wrapper
+def load_model(model_dir):
+    # model_dir = os.path.join(save_model_dir, 'distilbert')
+    # dataset_dir = os.path.join(save_data_dir, 'imdb')
+
+    # Load tokenizer and model from local disk
+    tokenizer = DistilBertTokenizer.from_pretrained(model_dir)
+    model = DistilBertForSequenceClassification.from_pretrained(model_dir, num_labels=2)  # 2 labels for sentiment analysis
+
+    return [tokenizer, model]
+
+@timing_tracing_wrapper
+def load_dataset_for_distilbert(dataset_paths):
+    # https://huggingface.co/docs/datasets/v1.12.0/package_reference/loading_methods.html
+    # dataset = load_from_disk(dataset_dir)
+
+    features = Features({
+    'overall': Value('int32'),
+    'vote': Value('string'),
+    'verified': Value('bool'),
+    'reviewTime': Value('string'),
+    'reviewerID': Value('string'),
+    'asin': Value('string'),
+    # 'style': {
+    #     'Format:': Value('string')
+    # },
+    'reviewerName': Value('string'),
+    'reviewText': Value('string'),
+    'summary': Value('string'),
+    'unixReviewTime': Value('int32'),
+    })
+
+    # dataset = load_dataset('json', data_files={'train': 'path/to/train.json', 'test': 'path/to/test.json'})
+    dataset = load_dataset('json', data_files=dataset_paths, split='train', features=features)
+    return [dataset]
+
+@timing_tracing_wrapper
+def tokenize_and_prepare_dataset(dataset, tokenizer):
     # Tokenize the dataset
-    separator='tokenize_dataset'
-    print(f'======== {separator} =======')
-    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
-    begin = start_timer()
-    tokenized_datasets = dataset.map(lambda examples: tokenize_function(examples, tokenizer), batched=True)
+    tokenized_datasets = dataset.map(lambda data: tokenize_function(data, tokenizer, args.textfield), batched=True)
 
     # Prepare the dataset for training
     train_dataset = tokenized_datasets['train'].shuffle(seed=42).select(range(args.train_samples))
     eval_dataset = tokenized_datasets['test'].shuffle(seed=42).select(range(args.eval_samples))
-    end = start_timer()
-    print(f"************ Time to prepare dataset for training: {get_time_milis(end - begin)} miliseconds. ")
-    os.path.isfile('/mnt/fs1/lroc/tokenize_datasets_end.txt')
+    
+    return[train_dataset, eval_dataset]
 
-    # Define the training arguments
-    separator='training_arguments'
-    print(f'======== {separator} =======')
-    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
-    begin = start_timer()
+@timing_tracing_wrapper
+def train_arguments(args):
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         evaluation_strategy="epoch",
@@ -83,10 +93,10 @@ def main(args):
         metric_for_best_model="accuracy",
         ddp_find_unused_parameters=False,
     )
+    return [training_args]
 
-    separator='init_trainer'
-    print(f'======== {separator} =======')
-    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
+@timing_tracing_wrapper
+def train(model, training_args, train_dataset, eval_dataset):
     # Initialize the Trainer
     trainer = Trainer(
         model=model,
@@ -95,33 +105,28 @@ def main(args):
         eval_dataset=eval_dataset,
         compute_metrics=compute_metrics,
     )
-    # Train the model
-    separator='start_training'
-    print(f'======== {separator} =======')
-    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
     trainer.train()
-    end = start_timer() 
-    print(f"************ Time to train the model: {get_time_milis(end - begin)} miliseconds. ")
+    return [trainer]
 
+@timing_tracing_wrapper
+def eval_model(trainer):
     # Evaluate the model
+    return [trainer.evaluate()]
 
-    begin = start_timer()
-    eval_results = trainer.evaluate()
-    end = start_timer() 
-    print(f"************ Time to evaluate the model: {get_time_milis(end - begin)} miliseconds. ")
-    print(f"Evaluation results: {eval_results}")
-
-    # Save the fine-tuned model
-    separator='save_model_tokenizer'
-    print(f'======== {separator} =======')
-    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
-    os.path.isfile('/mnt/fs1/lroc/write_model.txt')
-    begin = start_timer()
+# FIXME: check eval_trainer needed?
+@timing_tracing_wrapper
+def save_model(args, model, tokenizer):
     model.save_pretrained(os.path.join(args.output_dir, "final_model"))
     tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
-    end = start_timer() 
-    print(f"************ Time to save the model: {get_time_milis(end - begin)} miliseconds. ")
-    os.path.isfile('/mnt/fs1/lroc/write_model_end.txt')
+
+def main(args):
+    [tokenizer, model] = load_model(args.model_dir, separator="load_model")
+    [dataset] = load_dataset_for_distilbert(args.data_dir, separator="load_dataset")
+    [train_dataset, eval_dataset] = tokenize_and_prepare_dataset(dataset,tokenizer, separator='tokenize_dataset')
+    [training_args] = train_arguments(args, separator='training_arguments')
+    [trainer] = train(model, training_args, train_dataset, eval_dataset, 'start_training')
+    [eval_trainer] = eval_model(trainer, separator="eval_model")
+    save_model(separator='save_model_tokenizer')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train DistilBERT model with IMDb dataset from local disk.')
@@ -133,6 +138,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training and evaluation')
     parser.add_argument('--epochs', type=int, default=3, help='Number of training epochs')
     parser.add_argument('--learning_rate', type=float, default=5e-5, help='Learning rate')
+    parser.add_argument('--textfield', type=str, default="reviewText", help="field name in the dataset that contains training data")
 
     args = parser.parse_args()
     main(args)
