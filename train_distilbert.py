@@ -16,19 +16,26 @@ def load_model_and_dataset(model_dir, dataset_dir):
     # dataset_dir = os.path.join(save_data_dir, 'imdb')
 
     # Load tokenizer and model from local disk
+    separator='load_model'
+    print(f'======== {separator} =======')
+    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
     begin = start_timer()
-    print(f'time now: {begin}')
     tokenizer = DistilBertTokenizer.from_pretrained(model_dir)
     model = DistilBertForSequenceClassification.from_pretrained(model_dir, num_labels=2)  # 2 labels for sentiment analysis
     end = start_timer()
-    print(f'time now: {end}, time diff: {end - begin}, totoal seconds: {(end - begin).total_seconds()}')
     print(f"************ Time to load tokenizer and models: {get_time_milis(end - begin)} miliseconds. ")
+    os.path.isfile('/mnt/fs1/lroc/load_model_end.txt')
 
     # Load dataset from local disk
+    separator='load_dataset'
+    print(f'======== {separator} =======')
+    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
     begin = start_timer()
+    # https://huggingface.co/docs/datasets/v1.12.0/package_reference/loading_methods.html
     dataset = load_from_disk(dataset_dir)
     end = start_timer()
     print(f"************ Time to load dataset from disks: {get_time_milis(end - begin)} miliseconds. ")
+    os.path.isfile('/mnt/fs1/lroc/load_dataset_end.txt')
 
     return tokenizer, model, dataset
 
@@ -45,6 +52,9 @@ def main(args):
     tokenizer, model, dataset = load_model_and_dataset(args.model_dir, args.data_dir)
 
     # Tokenize the dataset
+    separator='tokenize_dataset'
+    print(f'======== {separator} =======')
+    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
     begin = start_timer()
     tokenized_datasets = dataset.map(lambda examples: tokenize_function(examples, tokenizer), batched=True)
 
@@ -53,8 +63,12 @@ def main(args):
     eval_dataset = tokenized_datasets['test'].shuffle(seed=42).select(range(args.eval_samples))
     end = start_timer()
     print(f"************ Time to prepare dataset for training: {get_time_milis(end - begin)} miliseconds. ")
+    os.path.isfile('/mnt/fs1/lroc/tokenize_datasets_end.txt')
 
     # Define the training arguments
+    separator='training_arguments'
+    print(f'======== {separator} =======')
+    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
     begin = start_timer()
     training_args = TrainingArguments(
         output_dir=args.output_dir,
@@ -70,6 +84,9 @@ def main(args):
         ddp_find_unused_parameters=False,
     )
 
+    separator='init_trainer'
+    print(f'======== {separator} =======')
+    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
     # Initialize the Trainer
     trainer = Trainer(
         model=model,
@@ -78,13 +95,16 @@ def main(args):
         eval_dataset=eval_dataset,
         compute_metrics=compute_metrics,
     )
-
     # Train the model
+    separator='start_training'
+    print(f'======== {separator} =======')
+    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
     trainer.train()
     end = start_timer() 
     print(f"************ Time to train the model: {get_time_milis(end - begin)} miliseconds. ")
 
     # Evaluate the model
+
     begin = start_timer()
     eval_results = trainer.evaluate()
     end = start_timer() 
@@ -92,11 +112,16 @@ def main(args):
     print(f"Evaluation results: {eval_results}")
 
     # Save the fine-tuned model
+    separator='save_model_tokenizer'
+    print(f'======== {separator} =======')
+    os.path.isfile(f'/mnt/fs1/lroc/{separator}.txt')
+    os.path.isfile('/mnt/fs1/lroc/write_model.txt')
     begin = start_timer()
     model.save_pretrained(os.path.join(args.output_dir, "final_model"))
     tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
     end = start_timer() 
     print(f"************ Time to save the model: {get_time_milis(end - begin)} miliseconds. ")
+    os.path.isfile('/mnt/fs1/lroc/write_model_end.txt')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train DistilBERT model with IMDb dataset from local disk.')
