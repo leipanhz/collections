@@ -51,15 +51,17 @@ def read_from_disk(file_path):
 
 def main():
 
-    url = 'https://snap.stanford.edu/data/amazon/Arts.txt.gz'
-    # dest_folder = '/Users/leipan/Downloads/Datasets/AmazonReviews/'
-    # filename = url.split('/')[-1].replace(" ", "_")  
-    # file_path = os.path.join(dest_folder, filename)
+    # url = 'https://snap.stanford.edu/data/amazon/Arts.txt.gz'
+    # # dest_folder = '/Users/leipan/Downloads/Datasets/AmazonReviews/'
+    # # filename = url.split('/')[-1].replace(" ", "_")  
+    # # file_path = os.path.join(dest_folder, filename)
 
-    # download_to_disk(url, file_path, separator='download_to_disk')
-    read_url(url, separator='read url to memory')
+    # # download_to_disk(url, file_path, separator='download_to_disk')
+    # read_url(url, separator='read url to memory')
     
-    # read_from_disk(file_path, separator='read from disk')
+    # # read_from_disk(file_path, separator='read from disk')
+
+    time.sleep(20)
 
 if __name__ == "__main__":
     main()
